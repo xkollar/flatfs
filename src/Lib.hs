@@ -3,12 +3,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 module Lib
-    ( Delimiters(..)
+    ( BlockSize(..)
+    , Delimiters(..)
     , Header(..)
     , Label()
     , NextInodeBlock(..)
     , Superblock(..)
-    , SuperblockSize(..)
     , Version(..)
     )
   where
@@ -62,48 +62,52 @@ instance Binary Label where
     put (Label l) = putLazyByteString (BSL.take 16 $ l <> BSL.repeat 0)
     get = Label . BSL.takeWhile (0 /=) <$> getLazyByteString 16
 
-data SuperblockSize
+data BlockSize
     = Size128
     | Size256
     | Size512
     | Size1024
     | Size2048
+    | Size4096
   deriving Show
 
-superblockSizeEncode :: SuperblockSize -> Word8
-superblockSizeEncode = \case
-    Size128 -> 0
+blockSizeEncode :: BlockSize -> Word8
+blockSizeEncode = \case
+    Size128  -> 0
     Size256  -> 1
     Size512  -> 2
     Size1024 -> 3
     Size2048 -> 4
+    Size4096 -> 5
 
-superblockSizeDecode :: MonadFail m => Word8 -> m SuperblockSize
-superblockSizeDecode = \case
+blockSizeDecode :: MonadFail m => Word8 -> m BlockSize
+blockSizeDecode = \case
     0 -> pure Size128
     1 -> pure Size256
     2 -> pure Size512
     3 -> pure Size1024
     4 -> pure Size2048
-    x -> fail $ printf "Invalid superblockSize %d" x
+    5 -> pure Size4096
+    x -> fail $ printf "Invalid BlockSize %d" x
 
-fromSuperblockSize :: Integral a => SuperblockSize -> a
-fromSuperblockSize size = 2^(7 + superblockSizeEncode size)
+fromBlockSize' :: (Integral a, Integral b) => a -> b
+fromBlockSize' x = 2^(7 + x)
+
+fromBlockSize :: Integral a => BlockSize -> a
+fromBlockSize = fromBlockSize' . blockSizeEncode
+
+instance Binary BlockSize where
+    put = put . blockSizeEncode
+    get = get >>= blockSizeDecode
 
 getSuperblockSize :: Integral a => Header -> a
-getSuperblockSize = fromSuperblockSize . superblockSize
-
-instance Binary SuperblockSize where
-    put = put . superblockSizeEncode
-    get = get >>= superblockSizeDecode
+getSuperblockSize = fromBlockSize . superblockSize
 
 data Header = Header
     { version :: Version
-    , size :: Word64
-    , superblockSize :: SuperblockSize
-    -- ^ (2 ^ (7 + min 4 Word8) - (58 + 6))
-    --                             |    '- Padding
-    --                             '- Size of header
+    , superblockSize :: BlockSize
+    , blockSize :: BlockSize
+    , blocks :: Word64
     , label :: Label
     , uuid :: UUID
     }
@@ -131,27 +135,36 @@ getAll g = f
             s <- f
             pure (x:s)
 
+superblockMagic :: ByteString
+superblockMagic = "FLAT"
+
 instance Binary Header where
     put Header{..} = do
-        putLazyByteString "FLAT"
+        putLazyByteString superblockMagic
         put version
-        put size
         put superblockSize
+        put blockSize
+        put blocks
         putLazyByteString "LABEL="
         put label
         putLazyByteString "UUID="
         put uuid
         putLazyByteString $ BSL.replicate 6 0
     get = do
-        str "FLAT"
-        ret <- Header <$> get <*> get <*> get <*> (str "LABEL=" *> get) <*> (str "UUID=" *> get)
-        skip 6
+        str superblockMagic
+        ret <- Header
+                <$> get
+                <*> get
+                <*> get
+                <*> get
+                <*> (str "LABEL=" *> get)
+                <*> (str "UUID=" *> get)
+        skip 5
         pure ret
 
 newtype Delimiters = Delimiters (Set Word64)
   deriving Show
 
--- XXX lol needs plenty of work
 instance Binary Delimiters where
     put (Delimiters s) = for_ (Set.toAscList s) put
     get = Delimiters . Set.fromList . filter (0 /=) <$> getAll get

@@ -6,6 +6,12 @@ author:              "Author name here"
 maintainer:          "example@example.com"
 copyright:           "2021 Author name here"
 
+flags:
+  repl:
+    description: Repl Friendly (load Prelude)
+    manual: true
+    default: false
+
 extra-source-files:
 - README.md
 - ChangeLog.md
@@ -27,8 +33,14 @@ ghc-options:
 - -fwarn-tabs
 - -fwarn-missing-import-lists
 - -fwarn-implicit-prelude
-default-extensions:
-- NoImplicitPrelude
+
+when:
+- condition: flag(repl)
+  then: {}
+  else:
+    default-extensions:
+    - NoImplicitPrelude
+
 # extra-libraries:
 # - util-linux
 
@@ -38,6 +50,7 @@ library:
   - binary
   - bytestring
   - containers
+  - pureMD5
   - uuid
 executables:
   flatfs:

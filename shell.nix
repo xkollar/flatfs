@@ -8,6 +8,7 @@ let
         cabal-install
         hlint
       ];
+      shellHook = "hpack";
     }
   );
 in
