@@ -1,35 +1,42 @@
-# flatfs
+# FlatFS
 
-* Small overhead ([extent based](https://en.wikipedia.org/wiki/Extent_\(file_systems\)), one extent per file)
-* Write once (primarily, so we can have one extet per file).
-* At least partial recoverability by linear sanning of underlying medium (files have headers with magic number, size, and checksum).
+Purpose: File system to store few large (relative to medium) files with minimum
+overhead.
+
+Ideas/principles:
+
+* Small overhead ([extent based](https://en.wikipedia.org/wiki/Extent_\(file_systems\)), one extent per file).
+* Write once (primarily, so we can have one extent per file without having to deal with fragmentation).
+* At least partial recoverability by linear scanning of underlying medium (files have headers with magic number, size, and checksum).
 * Possible extensions that don't interfere with previous points:
-    * Append to last created file (continue interrupted download)
-    * Delete last created file (kinda pop it off the stack)
+    * Append to last created file (continue interrupted download).
+    * Delete last created file (kinda pop it off the stack).
+* Even though initial implementation is FUSE, design should
+  not prevent this from being implemented also as a kernel module.
 
 ## SuperBlock
 
 Block sizes are encoded as `(2^(7 + (min 5 (Word8))))`
 ```
-  4B: FLAT
+  4B: "FLAT"
   2B: Version
       1B: Major (Word8)
       1B: Minor (Word8)
   1B: SuperBlockSize
       Block size, inode map of size: (X-64)/8-1
-      0 -> 128B block, inode map size: 7
-      1 -> 256B block, inode map size: 23
-      2 -> 512B block, inode map size: 55
-      3 -> 1024B block, inode map size: 119
-      4 -> 2048B block, inode map size: 247
-      5 -> 4096B block, inode map size: 247
-  5B: zeros (alignmnt/reserved)
+      0 -> 128B block, extent map size: 7
+      1 -> 256B block, extent map size: 23
+      2 -> 512B block, extent map size: 55
+      3 -> 1024B block, extent map size: 119
+      4 -> 2048B block, extent map size: 247
+      5 -> 4096B block, extent map size: 247
   1B: BlockSize (<=SuperBlockSize)
   8B: Size (Word64) Number of blocks (Not including SuperBlock)
   6B: "LABEL="
  16B: Label (zero padded)
   5B: "UUID="
  16B: UUID
+  5B: zeros (alignment/reserved)
 [8B]: Extent map, list of file boundaries Word64
       list of blocks/positions of file header blocks
       (followed by files themselves)
@@ -47,21 +54,10 @@ Block sizes are encoded as `(2^(7 + (min 5 (Word8))))`
 ...
 ```
 
-```
-| Device                                        |
-|---------------|---------------|---------------|
-| Cluster       | Cluster       | Cluster       |
-|               |
-|               \_______________________________
-|                                               \
-|---------------|---------------|---------------|
-| Block         | Block         | Block         |
-```
-
 We need:
-* `mkfs.flat`: analogous to other mkfs things
-* `flatfs`: fuse thing to access the filesystem
-* `fsck.flat`: consistency check
+* `mkfs.flat`: analogous to other mkfs things.
+* `flatfs`: fuse thing to access the files ystem.
+* `fsck.flat`: consistency check.
 
 # Playground
 

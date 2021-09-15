@@ -149,7 +149,7 @@ instance Binary Header where
         put label
         putLazyByteString "UUID="
         put uuid
-        putLazyByteString $ BSL.replicate 6 0
+        putLazyByteString $ BSL.replicate 5 0
     get = do
         str superblockMagic
         ret <- Header
