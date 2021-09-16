@@ -17,9 +17,9 @@ import Data.UUID.V4 (nextRandom)
 
 import Lib
     ( Delimiters(Delimiters)
-    , Header(Header, version, size, label, uuid, superblockSize)
+    , Header(Header, blockSize, blocks, version, label, uuid, superblockSize)
     , NextInodeBlock(NextInodeBlock)
-    , SuperblockSize(Size2048)
+    , BlockSize(Size512, Size1024)
     , Superblock(Superblock, header, delimiters, nextInodeBlock)
     , Version(Version)
     )
@@ -39,8 +39,9 @@ makeFlat config = withBinaryFile (device config) ReadWriteMode $ \ handle -> do
     let label = "plots"
         header = Header
             { version = flatfs_version
-            , size = 1073741824
-            , superblockSize = Size2048
+            , superblockSize = Size512
+            , blockSize = Size1024
+            , blocks = 1048576
             , label = label
             , uuid = freshUuid
             }
