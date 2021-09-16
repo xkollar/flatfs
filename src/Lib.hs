@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,6 +12,7 @@ module Lib
     , NextInodeBlock(..)
     , Superblock(..)
     , Version(..)
+    , fromBlockSize
     )
   where
 
@@ -22,7 +25,7 @@ import Data.Binary (Binary(put, get), Get, getWord8, putWord8)
 import Data.Binary.Get (getLazyByteString, bytesRead, isEmpty, isolate, skip)
 import Data.Binary.Put (Put, putLazyByteString, runPut)
 import Data.Bool (Bool(False, True))
-import Data.Eq ((/=))
+import Data.Eq (Eq, (/=))
 import Data.Foldable (for_)
 import Data.Function (($), (.))
 import Data.Functor ((<$>))
@@ -30,6 +33,7 @@ import Data.Int (Int64)
 import Data.List (filter)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Monoid ((<>))
+import Data.Ord (Ord)
 import Data.String (IsString(fromString))
 import Data.Word (Word8, Word64)
 import Text.Read (Read)
@@ -54,7 +58,7 @@ instance Binary Version where
     get = Version <$> getWord8 <*> getWord8
 
 newtype Label = Label ByteString
-  deriving Show
+  deriving newtype Show
 
 instance IsString Label where
     fromString = Label . BSL.take 16 . fromString
@@ -70,7 +74,7 @@ data BlockSize
     | Size1024
     | Size2048
     | Size4096
-  deriving (Read, Show)
+  deriving (Eq, Ord, Read, Show)
 
 blockSizeEncode :: BlockSize -> Word8
 blockSizeEncode = \case
@@ -164,14 +168,14 @@ instance Binary Header where
         pure ret
 
 newtype Delimiters = Delimiters (Set Word64)
-  deriving Show
+  deriving newtype Show
 
 instance Binary Delimiters where
     put (Delimiters s) = for_ (Set.toAscList s) put
     get = Delimiters . Set.fromList . filter (0 /=) <$> getAll get
 
 newtype NextInodeBlock = NextInodeBlock (Maybe Word64)
-  deriving Show
+  deriving newtype Show
 
 instance Binary NextInodeBlock where
     put (NextInodeBlock x) = case x of
