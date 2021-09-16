@@ -135,10 +135,7 @@ getAll g = f
   where
     f = isEmpty >>= \case
         True -> pure []
-        False -> do
-            x <- g
-            s <- f
-            pure (x:s)
+        False -> (:) <$> g <*> f
 
 superblockMagic :: ByteString
 superblockMagic = "FLAT"

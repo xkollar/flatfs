@@ -17,7 +17,7 @@ import Data.Maybe (Maybe(Nothing), maybe)
 import Data.Ord ((>))
 import Data.Word (Word64)
 import System.IO
-    ( FilePath, IO, IOMode(ReadMode, ReadWriteMode)
+    ( Handle, IO, IOMode(ReadWriteMode)
     , hFileSize, hTell, print, withBinaryFile
     )
 import Text.Printf (printf)
@@ -46,21 +46,19 @@ flatfs_version = Version 0 1
 fromMaybe :: Applicative f => f a -> Maybe a -> f a
 fromMaybe = flip maybe pure
 
-getSize :: FilePath -> BlockSize -> IO Word64
-getSize device blockSize = do
-    x <- fromInteger <$> size
+getBlocks :: Handle -> BlockSize -> IO Word64
+getBlocks handle blockSize = do
+    size <- fromInteger <$> hFileSize handle
     let bs = fromBlockSize blockSize
-        (d, m) = x `divMod` bs
-    when (m /= 0) $ printf "Block not aligned %d blocks of size %d and remainder %d" d bs m
+        (d, m) = size `divMod` bs
+    when (m /= 0) $ printf "Block not aligned %d blocks of size %d and remainder %d\n" d bs m
     pure d
   where
-    size = withBinaryFile device ReadMode hFileSize
 
 makeFlat :: Config -> IO ()
-makeFlat c@Config{..} = do
-    print c
+makeFlat Config{..} = withBinaryFile device ReadWriteMode $ \ handle -> do
     givenUuid <- fromMaybe nextRandom uuid
-    givenBlocks <- fromMaybe (getSize device blockSize) blocks
+    givenBlocks <- fromMaybe (getBlocks handle blockSize) blocks
     when (blockSize > superblockSize) $ fail "blockSize > superblockSize"
     let header = Header
             { version = flatfs_version
@@ -76,14 +74,9 @@ makeFlat c@Config{..} = do
             , nextInodeBlock = NextInodeBlock Nothing
             }
     print superblock
-    withBinaryFile device ReadWriteMode $ \ handle -> do
-        BSL.hPut handle $ encode superblock
-        hTell handle >>= print
+    BSL.hPut handle $ encode superblock
+    hTell handle >>= print
     pure ()
-
--- main' :: [FilePath] -> IO ()
--- main' [filepath] =  makeFlat $ Config {device = filepath}
--- main' _ = putStrLn "BarArg"
 
 main :: IO ()
 main = execParser opts >>= makeFlat
