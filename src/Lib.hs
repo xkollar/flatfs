@@ -32,6 +32,7 @@ import Data.Maybe (Maybe(Just, Nothing))
 import Data.Monoid ((<>))
 import Data.String (IsString(fromString))
 import Data.Word (Word8, Word64)
+import Text.Read (Read)
 import Text.Show (Show, show)
 import Text.Printf (printf)
 
@@ -69,7 +70,7 @@ data BlockSize
     | Size1024
     | Size2048
     | Size4096
-  deriving Show
+  deriving (Read, Show)
 
 blockSizeEncode :: BlockSize -> Word8
 blockSizeEncode = \case
