@@ -6,13 +6,14 @@ overhead.
 Ideas/principles:
 
 * Small overhead ([extent based](https://en.wikipedia.org/wiki/Extent_\(file_systems\)), one extent per file).
-* Write once (primarily, so we can have one extent per file without having to deal with fragmentation).
+* Write once (Initially so to avoid fragmentation (one extent per file)).
+    * Possible extensions that don't interfere with previous points:
+        * Append to last created file (continue interrupted download).
+        * Delete last created file (kinda pop it off the stack).
 * At least partial recoverability by linear scanning of underlying medium (files have headers with magic number, size, and checksum).
-* Possible extensions that don't interfere with previous points:
-    * Append to last created file (continue interrupted download).
-    * Delete last created file (kinda pop it off the stack).
 * Even though initial implementation is FUSE, design should
   not prevent this from being implemented also as a kernel module.
+* Ability to resize the file system (both grow and shrink).
 
 ## SuperBlock
 

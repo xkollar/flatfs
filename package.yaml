@@ -35,11 +35,9 @@ ghc-options:
 - -fwarn-implicit-prelude
 
 when:
-- condition: flag(repl)
-  then: {}
-  else:
-    default-extensions:
-    - NoImplicitPrelude
+  condition: '!(flag(repl))'
+  default-extensions:
+  - NoImplicitPrelude
 
 # extra-libraries:
 # - util-linux

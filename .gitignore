@@ -1,5 +1,5 @@
 .stack-work/
 *~
-/disk.img
 /dist-newstyle/
 /result
+*.img
