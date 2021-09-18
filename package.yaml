@@ -62,6 +62,7 @@ executables:
     - flatfs
     - HFuse
     - bytestring
+    - unix
   mkfs.flat:
     main:                Main.hs
     source-dirs:         mkfs
