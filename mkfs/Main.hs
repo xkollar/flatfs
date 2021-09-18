@@ -53,7 +53,6 @@ getBlocks handle blockSize = do
         (d, m) = size `divMod` bs
     when (m /= 0) $ printf "Block not aligned %d blocks of size %d and remainder %d\n" d bs m
     pure d
-  where
 
 makeFlat :: Config -> IO ()
 makeFlat Config{..} = withBinaryFile device ReadWriteMode $ \ handle -> do

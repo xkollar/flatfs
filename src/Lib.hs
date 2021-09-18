@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
@@ -8,15 +9,19 @@ module Lib
     ( BlockSize(..)
     , Delimiters(..)
     , Header(..)
-    , Label()
+    , Label(..)
     , NextInodeBlock(..)
     , Superblock(..)
     , Version(..)
     , fromBlockSize
+    , toNextInodeBlock
     )
   where
 
+
 import Prelude (Integral, (+), (-), (^), fromIntegral)
+import GHC.Generics (Generic)
+import GHC.Enum (Bounded, Enum)
 
 import Control.Applicative ((<*>), (*>), pure)
 import Control.Monad ((>>), (>>=), when)
@@ -41,7 +46,7 @@ import Text.Show (Show, show)
 import Text.Printf (printf)
 
 import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as BSL (length, repeat, replicate, take, takeWhile)
+import qualified Data.ByteString.Lazy as BSL (filter, length, repeat, replicate, take, takeWhile)
 import Data.Set (Set)
 import qualified Data.Set as Set (fromList, toAscList)
 import Data.UUID (UUID)
@@ -51,17 +56,18 @@ data Version = Version
     { major :: Word8
     , minor :: Word8
     }
-  deriving Show
+  deriving (Eq, Generic, Show)
 
 instance Binary Version where
     put Version{..} = putWord8 major >> putWord8 minor
     get = Version <$> getWord8 <*> getWord8
 
 newtype Label = Label ByteString
-  deriving newtype Show
+  deriving stock Generic
+  deriving newtype (Eq, Show)
 
 instance IsString Label where
-    fromString = Label . BSL.take 16 . fromString
+    fromString = Label . BSL.take 16 . BSL.filter (0 /=) . fromString
 
 instance Binary Label where
     put (Label l) = putLazyByteString (BSL.take 16 $ l <> BSL.repeat 0)
@@ -74,7 +80,7 @@ data BlockSize
     | Size1024
     | Size2048
     | Size4096
-  deriving (Eq, Ord, Read, Show)
+  deriving (Bounded, Enum, Eq, Generic, Ord, Read, Show)
 
 blockSizeEncode :: BlockSize -> Word8
 blockSizeEncode = \case
@@ -116,7 +122,7 @@ data Header = Header
     , label :: Label
     , uuid :: UUID
     }
-  deriving Show
+  deriving (Eq, Generic, Show)
 
 str :: ByteString -> Get ()
 str s = do
@@ -140,6 +146,12 @@ getAll g = f
 superblockMagic :: ByteString
 superblockMagic = "FLAT"
 
+labelMagic :: ByteString
+labelMagic = "LABEL="
+
+uuidMagic :: ByteString
+uuidMagic = "UUID="
+
 instance Binary Header where
     put Header{..} = do
         putLazyByteString superblockMagic
@@ -147,9 +159,9 @@ instance Binary Header where
         put superblockSize
         put blockSize
         put blocks
-        putLazyByteString "LABEL="
+        putLazyByteString labelMagic
         put label
-        putLazyByteString "UUID="
+        putLazyByteString uuidMagic
         put uuid
         putLazyByteString $ BSL.replicate 5 0
     get = do
@@ -159,35 +171,41 @@ instance Binary Header where
                 <*> get
                 <*> get
                 <*> get
-                <*> (str "LABEL=" *> get)
-                <*> (str "UUID=" *> get)
+                <*> (str labelMagic *> get)
+                <*> (str uuidMagic *> get)
         skip 5
         pure ret
 
 newtype Delimiters = Delimiters (Set Word64)
-  deriving newtype Show
+  deriving stock Generic
+  deriving newtype (Eq, Show)
 
 instance Binary Delimiters where
     put (Delimiters s) = for_ (Set.toAscList s) put
     get = Delimiters . Set.fromList . filter (0 /=) <$> getAll get
 
 newtype NextInodeBlock = NextInodeBlock (Maybe Word64)
-  deriving newtype Show
+  deriving stock Generic
+  deriving newtype (Eq, Show)
+
+toNextInodeBlock :: Word64 -> NextInodeBlock
+toNextInodeBlock = NextInodeBlock . \case
+    0 -> Nothing
+    x -> Just x
 
 instance Binary NextInodeBlock where
     put (NextInodeBlock x) = case x of
         Nothing -> put (0 :: Word64)
         Just offset -> put offset
-    get = get >>= pure . NextInodeBlock . \case
-        0 -> Nothing
-        x -> Just x
+    get = toNextInodeBlock <$> get
 
 data Superblock = Superblock
     { header :: Header
     , delimiters :: Delimiters
     , nextInodeBlock :: NextInodeBlock
     }
-  deriving Show
+  deriving stock Generic
+  deriving (Eq, Show)
 
 instance Binary Superblock where
     put Superblock{..} = do

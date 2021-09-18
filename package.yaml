@@ -87,3 +87,12 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - flatfs
+    - HUnit
+    - QuickCheck
+    - binary
+    - bytestring
+    - containers
+    - test-framework
+    - test-framework-hunit
+    - test-framework-quickcheck2
+    - uuid
