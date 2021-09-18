@@ -24,7 +24,7 @@ Block sizes are encoded as `(2^(7 + (min 5 (Word8))))`
       1B: Major (Word8)
       1B: Minor (Word8)
   1B: SuperBlockSize
-      Block size, inode map of size: (X-64)/8-1
+      Block size, extent map of size: (X-64)/8-1
       0 -> 128B block, extent map size: 7
       1 -> 256B block, extent map size: 23
       2 -> 512B block, extent map size: 55

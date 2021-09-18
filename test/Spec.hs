@@ -37,12 +37,12 @@ import Lib
     , Delimiters(Delimiters)
     , Header(Header)
     , Label(Label)
-    , NextInodeBlock(NextInodeBlock)
+    , NextExtentMapBlock(NextExtentMapBlock)
     , Superblock(Superblock)
     , Version(Version)
     , fromBlockSize
     , superblockSize
-    , toNextInodeBlock
+    , toNextExtentMapBlock
     )
 
 instance Arbitrary Version where
@@ -67,11 +67,11 @@ instance Arbitrary Delimiters where
     arbitrary = Delimiters . Set.filter (0 /=) <$> arbitrary
     shrink _ = []
 
-instance Arbitrary NextInodeBlock where
-    arbitrary = toNextInodeBlock <$> arbitrary
-    shrink (NextInodeBlock n) = maybe [] f n
+instance Arbitrary NextExtentMapBlock where
+    arbitrary = toNextExtentMapBlock <$> arbitrary
+    shrink (NextExtentMapBlock n) = maybe [] f n
       where
-        f x = toNextInodeBlock <$> [x `div` 2, x-1]
+        f x = toNextExtentMapBlock <$> [x `div` 2, x-1]
 
 minMax :: Ord a => a -> a -> (a, a)
 minMax x y = if x > y then (y, x) else (x, y)

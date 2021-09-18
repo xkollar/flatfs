@@ -31,7 +31,7 @@ import Lib
     ( BlockSize
     , Delimiters(Delimiters)
     , Header(Header, blockSize, blocks, version, label, uuid, superblockSize)
-    , NextInodeBlock(NextInodeBlock)
+    , NextExtentMapBlock(NextExtentMapBlock)
     , Superblock(Superblock, header, delimiters, nextInodeBlock)
     , Version(Version)
     , fromBlockSize
@@ -70,7 +70,7 @@ makeFlat Config{..} = withBinaryFile device ReadWriteMode $ \ handle -> do
         superblock = Superblock
             { header = header
             , delimiters = Delimiters Set.empty
-            , nextInodeBlock = NextInodeBlock Nothing
+            , nextInodeBlock = NextExtentMapBlock Nothing
             }
     print superblock
     BSL.hPut handle $ encode superblock

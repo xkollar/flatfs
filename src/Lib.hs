@@ -10,11 +10,11 @@ module Lib
     , Delimiters(..)
     , Header(..)
     , Label(..)
-    , NextInodeBlock(..)
+    , NextExtentMapBlock(..)
     , Superblock(..)
     , Version(..)
     , fromBlockSize
-    , toNextInodeBlock
+    , toNextExtentMapBlock
     )
   where
 
@@ -184,25 +184,25 @@ instance Binary Delimiters where
     put (Delimiters s) = for_ (Set.toAscList s) put
     get = Delimiters . Set.fromList . filter (0 /=) <$> getAll get
 
-newtype NextInodeBlock = NextInodeBlock (Maybe Word64)
+newtype NextExtentMapBlock = NextExtentMapBlock (Maybe Word64)
   deriving stock Generic
   deriving newtype (Eq, Show)
 
-toNextInodeBlock :: Word64 -> NextInodeBlock
-toNextInodeBlock = NextInodeBlock . \case
+toNextExtentMapBlock :: Word64 -> NextExtentMapBlock
+toNextExtentMapBlock = NextExtentMapBlock . \case
     0 -> Nothing
     x -> Just x
 
-instance Binary NextInodeBlock where
-    put (NextInodeBlock x) = case x of
+instance Binary NextExtentMapBlock where
+    put (NextExtentMapBlock x) = case x of
         Nothing -> put (0 :: Word64)
         Just offset -> put offset
-    get = toNextInodeBlock <$> get
+    get = toNextExtentMapBlock <$> get
 
 data Superblock = Superblock
     { header :: Header
     , delimiters :: Delimiters
-    , nextInodeBlock :: NextInodeBlock
+    , nextInodeBlock :: NextExtentMapBlock
     }
   deriving stock Generic
   deriving (Eq, Show)
