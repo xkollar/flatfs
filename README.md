@@ -59,6 +59,7 @@ We need:
 * `mkfs.flat`: analogous to other mkfs things.
 * `flatfs`: fuse thing to access the files ystem.
 * `fsck.flat`: consistency check.
+* `tune.flat`: prit info about and modify the file system.
 
 # Playground
 
