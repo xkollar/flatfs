@@ -67,3 +67,9 @@ Prepare 1GB file to play with as partition...
 ```
 dd if=/dev/zero of=disk.img bs=1M count=1024
 ```
+
+Testing mount (keep in foreground, on termination umount)
+```
+mkdir -p mount
+cabal run exe:flatfs -- -o auto_unmount -f mount
+```
