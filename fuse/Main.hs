@@ -1,14 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Main where
+module Main (main) where
 
 import GHC.Real (fromIntegral)
 
 import Control.Applicative (pure)
 import Control.Monad ((>>=))
+import Data.Bool (Bool(True))
 import Data.Either (Either(Left, Right))
+import Data.Eq ((==))
 import Data.Function (($), (.))
 import Data.Functor ((<$>), fmap)
-import Data.IORef (IORef, newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.List (foldr1)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Monoid ((<>))
@@ -24,12 +26,16 @@ import System.Fuse
     , FileStat(FileStat)
     , FuseContext
     , FuseOperations
-    , OpenFileFlags
-    , OpenMode(ReadOnly)
+    , OpenFileFlags(OpenFileFlags)
+    , OpenMode(ReadOnly, ReadWrite, WriteOnly)
+    , append
     , defaultExceptionHandler
     , defaultFuseOps
+    , eACCES
+    , eEXIST
     , eNOENT
     , eOK
+    , fuseCreateDevice
     , fuseCtxGroupID
     , fuseCtxUserID
     , fuseGetFileStat
@@ -39,6 +45,7 @@ import System.Fuse
     , fuseRead
     , fuseReadDirectory
     , fuseRelease
+    , fuseWrite
     , getFuseContext
     , statAccessTime
     , statBlocks
@@ -52,15 +59,15 @@ import System.Fuse
     , statSpecialDeviceID
     , statStatusChangeTime
     )
-import System.Posix.Files (unionFileModes, ownerReadMode, ownerExecuteMode, groupReadMode, groupExecuteMode, otherReadMode, otherExecuteMode)
-import System.Posix.Types (ByteCount, FileOffset)
+import System.Posix.Files (unionFileModes, ownerReadMode, ownerWriteMode, ownerExecuteMode, groupReadMode, groupExecuteMode, otherReadMode, otherExecuteMode)
+import System.Posix.Types (ByteCount, DeviceID, FileMode, FileOffset)
 
 
 type File = ByteString
 type FS = Map FilePath File
 newtype State = State (IORef FS)
 
-data Handle = Handle
+data Handle = Handle OpenMode
 
 type FuseOut a = IO (Either Errno a)
 type FuseRet = IO Errno
@@ -72,13 +79,18 @@ ok :: a -> FuseOut a
 ok = pure . Right
 
 mkState :: IO State
-mkState = State <$> newIORef (Map.fromList [("a", "xa\n"), ("b", "xb\n")])
+mkState = State <$> (newIORef . Map.fromList)
+    [ ("a", "xa\n")
+    , ("b", "xb\n")
+    , ("wow", "omg\n")
+    ]
 
 dirStat :: FuseContext -> FileStat
 dirStat ctx = FileStat
     { statEntryType = Directory
     , statFileMode = foldr1 unionFileModes
         [ ownerReadMode
+        , ownerWriteMode
         , ownerExecuteMode
         , groupReadMode
         , groupExecuteMode
@@ -113,7 +125,6 @@ fileStat f ctx = FileStat
     , statStatusChangeTime = 0
     }
 
-
 flatGetFileStat :: State -> FilePath -> FuseOut FileStat
 flatGetFileStat _ "/" = getFuseContext >>= ok . dirStat
 flatGetFileStat (State st) ('/':fileName) = do
@@ -139,34 +150,68 @@ flatReadDirectory (State st) "/" = do
         fmap (\(n, c) -> (n, fileStat c ctx)) (Map.assocs fs)
 flatReadDirectory _ _ = fail eNOENT
 
-flatFuseOps :: State -> FuseOperations Handle
-flatFuseOps st = defaultFuseOps
-    { fuseGetFileStat = flatGetFileStat st
-    , fuseOpenDirectory = flatOpenDirectory
-    , fuseReadDirectory = flatReadDirectory st
-    , fuseOpen = flatOpen st
-    , fuseRead = flatRead st
-    , fuseRelease = flatClose st
-    }
-
 flatOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> FuseOut Handle
 flatOpen (State st) ('/':fileName) ReadOnly _flags = do
     fs <- readIORef st
     if Map.member fileName fs
-        then ok Handle
+        then ok $ Handle ReadOnly
         else fail eNOENT
+flatOpen (State st) ('/':fileName) WriteOnly OpenFileFlags{append = True} = do
+    fs <- readIORef st
+    if Map.member fileName fs
+        then ok $ Handle WriteOnly
+        else fail eNOENT
+flatOpen (State st) ('/':fileName) WriteOnly _ = do
+    fs <- readIORef st
+    case Map.lookup fileName fs of
+        Nothing -> fail eNOENT
+        Just f -> if BS.length f == 0
+            then ok $ Handle WriteOnly
+            else fail eACCES
+flatOpen _ _ ReadWrite _ = fail eACCES
 flatOpen _ _ _ _ = fail eNOENT
 
 flatRead :: State -> FilePath -> Handle -> ByteCount -> FileOffset -> FuseOut ByteString
-flatRead (State st) ('/':fileName) Handle bc fo = do
+flatRead (State st) ('/':fileName) (Handle ReadOnly) bc fo = do
     fs <- readIORef st
     case Map.lookup fileName fs of
         Nothing -> fail eNOENT
         Just f -> ok $ BS.take (fromIntegral bc) (BS.drop (fromIntegral fo) f)
 flatRead _ _ _ _ _ = fail eNOENT
 
+flatWrite :: State -> FilePath -> Handle -> ByteString -> FileOffset -> FuseOut ByteCount
+flatWrite (State st) ('/':fileName) (Handle WriteOnly) bs fo = do
+    atomicModifyIORef' st $ \ fs ->
+        case Map.lookup fileName fs of
+            Nothing -> (fs, Left eNOENT)
+            Just f -> if fromIntegral (BS.length f) == fo
+                then (Map.insert fileName (f <> bs) fs, Right . fromIntegral $ BS.length bs)
+                else (fs, Left eACCES)
+flatWrite _ _ (Handle ReadOnly) _ _ = fail eACCES
+flatWrite _ _ _ _ _ = fail eNOENT
+
 flatClose :: State -> FilePath -> Handle -> IO ()
-flatClose _ _ Handle = pure ()
+flatClose _ _ (Handle _) = pure ()
+
+flatCreateDevice :: State -> FilePath -> EntryType -> FileMode -> DeviceID -> FuseRet
+flatCreateDevice (State st) ('/':fileName) _ _ _ = do
+    atomicModifyIORef' st $ \ fs -> do
+        if Map.member fileName fs
+            then (fs, eEXIST)
+            else (Map.insert fileName "" fs, eOK)
+flatCreateDevice _ _ _ _ _ = pure eNOENT
+
+flatFuseOps :: State -> FuseOperations Handle
+flatFuseOps st = defaultFuseOps
+    { fuseGetFileStat = flatGetFileStat st
+    , fuseOpenDirectory = flatOpenDirectory
+    , fuseReadDirectory = flatReadDirectory st
+    , fuseCreateDevice = flatCreateDevice st
+    , fuseOpen = flatOpen st
+    , fuseRead = flatRead st
+    , fuseWrite = flatWrite st
+    , fuseRelease = flatClose st
+    }
 
 main :: IO ()
 main = do
