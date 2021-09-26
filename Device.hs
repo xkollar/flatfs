@@ -15,8 +15,11 @@ data Device = Device
 mkDevice :: Word64 -> IO Device
 mkDevice size = Device size <$> newArray (0, size-1) 0
 
--- size :: Device -> IO Size
--- size = pure . uncurry (-) . bounds . un
+size :: Device -> IO Size
+size = pure . s
+
+-- read :: Device -> Size -> Size -> ByteString
+-- read dev position size = 
 
 main :: IO ()
 main = do
