@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
@@ -151,25 +152,27 @@ flatReadDirectory (State st) "/" = do
 flatReadDirectory _ _ = fail eNOENT
 
 flatOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> FuseOut Handle
-flatOpen (State st) ('/':fileName) ReadOnly _flags = do
-    fs <- readIORef st
-    if Map.member fileName fs
-        then ok $ Handle ReadOnly
-        else fail eNOENT
-flatOpen (State st) ('/':fileName) WriteOnly OpenFileFlags{append = True} = do
-    fs <- readIORef st
-    if Map.member fileName fs
-        then ok $ Handle WriteOnly
-        else fail eNOENT
-flatOpen (State st) ('/':fileName) WriteOnly _ = do
-    fs <- readIORef st
-    case Map.lookup fileName fs of
-        Nothing -> fail eNOENT
-        Just f -> if BS.length f == 0
-            then ok $ Handle WriteOnly
-            else fail eACCES
-flatOpen _ _ ReadWrite _ = fail eACCES
-flatOpen _ _ _ _ = fail eNOENT
+flatOpen (State st) ('/':fileName) = \case
+    ReadOnly -> \ _flags -> do
+        fs <- readIORef st
+        if Map.member fileName fs
+            then ok $ Handle ReadOnly
+            else fail eNOENT
+    WriteOnly -> \case
+        OpenFileFlags{append = True} -> do
+            fs <- readIORef st
+            if Map.member fileName fs
+                then ok $ Handle WriteOnly
+                else fail eNOENT
+        _ -> do
+            fs <- readIORef st
+            case Map.lookup fileName fs of
+                Nothing -> fail eNOENT
+                Just f -> if BS.length f == 0
+                    then ok $ Handle WriteOnly
+                    else fail eACCES
+    ReadWrite -> \ _flags -> fail eACCES
+flatOpen _ _ = \ _ _ -> fail eNOENT
 
 flatRead :: State -> FilePath -> Handle -> ByteCount -> FileOffset -> FuseOut ByteString
 flatRead (State st) ('/':fileName) (Handle ReadOnly) bc fo = do
