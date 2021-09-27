@@ -5,21 +5,20 @@ import GHC.Real (fromIntegral)
 
 import Control.Applicative (pure)
 import Control.Monad ((>>=))
-import Data.Bool (Bool(True))
+import Data.Bool (Bool(True), otherwise)
 import Data.Either (Either(Left, Right))
-import Data.Eq ((==))
+import Data.Eq (Eq, (==))
 import Data.Function (($), (.))
 import Data.Functor ((<$>), fmap)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.List (foldr1)
+import qualified Data.List as List
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Monoid ((<>))
 import System.IO (FilePath, IO, putStrLn)
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import System.Fuse
     ( EntryType(Directory, RegularFile)
     , Errno
@@ -64,7 +63,7 @@ import System.Posix.Types (ByteCount, DeviceID, FileMode, FileOffset)
 
 
 type File = ByteString
-type FS = Map FilePath File
+type FS = [(FilePath, File)]
 newtype State = State (IORef FS)
 
 data Handle = Handle OpenMode
@@ -79,7 +78,7 @@ ok :: a -> FuseOut a
 ok = pure . Right
 
 mkState :: IO State
-mkState = State <$> (newIORef . Map.fromList)
+mkState = State <$> newIORef
     [ ("a", "xa\n")
     , ("b", "xb\n")
     , ("wow", "omg\n")
@@ -130,7 +129,7 @@ flatGetFileStat _ "/" = getFuseContext >>= ok . dirStat
 flatGetFileStat (State st) ('/':fileName) = do
     fs <- readIORef st
     putStrLn fileName
-    case Map.lookup fileName fs of
+    case List.lookup fileName fs of
         Just f -> getFuseContext >>= ok . fileStat f
         Nothing -> fail eNOENT
 flatGetFileStat _ _ = fail eNOENT
@@ -147,13 +146,13 @@ flatReadDirectory (State st) "/" = do
         [ (".", dirStat ctx)
         , ("..", dirStat ctx)
         ] <>
-        fmap (\(n, c) -> (n, fileStat c ctx)) (Map.assocs fs)
+        fmap (\(n, c) -> (n, fileStat c ctx)) fs
 flatReadDirectory _ _ = fail eNOENT
 
 flatOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> FuseOut Handle
 flatOpen (State st) ('/':fileName) mode flags = do
     fs <- readIORef st
-    case Map.lookup fileName fs of
+    case List.lookup fileName fs of
         Just f -> case mode of
             ReadOnly ->
                 ok $ Handle mode
@@ -170,18 +169,26 @@ flatOpen _ _ _ _ = fail eNOENT
 flatRead :: State -> FilePath -> Handle -> ByteCount -> FileOffset -> FuseOut ByteString
 flatRead (State st) ('/':fileName) (Handle ReadOnly) bc fo = do
     fs <- readIORef st
-    case Map.lookup fileName fs of
+    case List.lookup fileName fs of
         Nothing -> fail eNOENT
         Just f -> ok $ BS.take (fromIntegral bc) (BS.drop (fromIntegral fo) f)
 flatRead _ _ _ _ _ = fail eNOENT
 
+update :: Eq a => a -> b -> [(a,b)] -> [(a,b)]
+update a v = go
+  where
+    go [] = []
+    go (x@(k, _):s)
+        | a == k = (k, v):s
+        | otherwise  = x:go s
+
 flatWrite :: State -> FilePath -> Handle -> ByteString -> FileOffset -> FuseOut ByteCount
 flatWrite (State st) ('/':fileName) (Handle WriteOnly) bs fo = do
     atomicModifyIORef' st $ \ fs ->
-        case Map.lookup fileName fs of
+        case List.lookup fileName fs of
             Nothing -> (fs, Left eNOENT)
             Just f -> if fromIntegral (BS.length f) == fo
-                then (Map.insert fileName (f <> bs) fs, Right . fromIntegral $ BS.length bs)
+                then (update fileName (f <> bs) fs, Right . fromIntegral $ BS.length bs)
                 else (fs, Left eACCES)
 flatWrite _ _ (Handle ReadOnly) _ _ = fail eACCES
 flatWrite _ _ _ _ _ = fail eNOENT
@@ -192,9 +199,9 @@ flatClose _ _ (Handle _) = pure ()
 flatCreateDevice :: State -> FilePath -> EntryType -> FileMode -> DeviceID -> FuseRet
 flatCreateDevice (State st) ('/':fileName) _ _ _ = do
     atomicModifyIORef' st $ \ fs -> do
-        if Map.member fileName fs
-            then (fs, eEXIST)
-            else (Map.insert fileName "" fs, eOK)
+        case List.lookup fileName fs of
+            Just _ -> (fs, eEXIST)
+            Nothing -> ((fileName, ""):fs, eOK)
 flatCreateDevice _ _ _ _ _ = pure eNOENT
 
 flatFuseOps :: State -> FuseOperations Handle
