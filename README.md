@@ -57,9 +57,10 @@ Block sizes are encoded as `(2^(7 + (min 5 (Word8))))`
 
 We need:
 * `mkfs.flat`: analogous to other mkfs things.
-* `flatfs`: fuse thing to access the files ystem.
+* `flatfs`: fuse thing to access the file system.
 * `fsck.flat`: consistency check.
-* `tune.flat`: prit info about and modify the file system.
+* `tune.flat`: print info about and modify the file system.
+* `resize.flat`: resize the file system.
 
 # Playground
 
