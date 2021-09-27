@@ -206,14 +206,42 @@ flatCreateDevice _ _ _ _ _ = pure eNOENT
 
 flatFuseOps :: State -> FuseOperations Handle
 flatFuseOps st = defaultFuseOps
-    { fuseGetFileStat = flatGetFileStat st
-    , fuseOpenDirectory = flatOpenDirectory
-    , fuseReadDirectory = flatReadDirectory st
+    {
+    -- fuseGetFileStat :: FilePath -> IO (Either Errno FileStat)
+      fuseGetFileStat = flatGetFileStat st
+    -- fuseReadSymbolicLink :: FilePath -> IO (Either Errno FilePath)
+    -- fuseCreateDevice :: FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno
     , fuseCreateDevice = flatCreateDevice st
+    -- fuseCreateDirectory :: FilePath -> FileMode -> IO Errno
+    -- fuseRemoveLink :: FilePath -> IO Errno
+    -- fuseRemoveDirectory :: FilePath -> IO Errno
+    -- fuseCreateSymbolicLink :: FilePath -> FilePath -> IO Errno
+    -- fuseRename :: FilePath -> FilePath -> IO Errno
+    -- fuseCreateLink :: FilePath -> FilePath -> IO Errno
+    -- fuseSetFileMode :: FilePath -> FileMode -> IO Errno
+    -- fuseSetOwnerAndGroup :: FilePath -> UserID -> GroupID -> IO Errno
+    -- fuseSetFileSize :: FilePath -> FileOffset -> IO Errno
+    -- fuseSetFileTimes :: FilePath -> EpochTime -> EpochTime -> IO Errno
+    -- fuseOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
     , fuseOpen = flatOpen st
+    -- fuseRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
     , fuseRead = flatRead st
+    -- fuseWrite :: FilePath -> fh -> ByteString -> FileOffset -> IO (Either Errno ByteCount)
     , fuseWrite = flatWrite st
+    -- fuseGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
+    -- fuseFlush :: FilePath -> fh -> IO Errno
+    -- fuseRelease :: FilePath -> fh -> IO ()
     , fuseRelease = flatClose st
+    -- fuseSynchronizeFile :: FilePath -> SyncType -> IO Errno
+    -- fuseOpenDirectory :: FilePath -> IO Errno
+    , fuseOpenDirectory = flatOpenDirectory
+    -- fuseReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
+    , fuseReadDirectory = flatReadDirectory st
+    -- fuseReleaseDirectory :: FilePath -> IO Errno
+    -- fuseSynchronizeDirectory :: FilePath -> SyncType -> IO Errno
+    -- fuseAccess :: FilePath -> Int -> IO Errno
+    -- fuseInit :: IO ()
+    -- fuseDestroy :: IO ()
     }
 
 main :: IO ()
