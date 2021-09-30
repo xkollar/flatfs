@@ -11,7 +11,7 @@ import Data.Eq (Eq, (==))
 import Data.Function (($), (.))
 import Data.Functor ((<$>), fmap)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.List (foldr1)
+import Data.List (foldr1, repeat, zipWith)
 import qualified Data.List as List
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Monoid ((<>))
@@ -107,12 +107,16 @@ dirStat ctx = FileStat
     , statStatusChangeTime = 0
     }
 
-fileStat :: File -> FuseContext -> FileStat
-fileStat f ctx = FileStat
+readable :: FileMode
+readable = ownerReadMode
+
+writeable :: FileMode
+writeable = ownerReadMode `unionFileModes` ownerWriteMode
+
+fileStat :: File -> FileMode -> FuseContext -> FileStat
+fileStat f mode ctx = FileStat
     { statEntryType = RegularFile
-    , statFileMode = foldr1 unionFileModes
-        [ ownerReadMode
-        ]
+    , statFileMode = mode
     , statLinkCount = 1
     , statFileOwner = fuseCtxUserID ctx
     , statFileGroup = fuseCtxGroupID ctx
@@ -124,13 +128,16 @@ fileStat f ctx = FileStat
     , statStatusChangeTime = 0
     }
 
+addModes :: FS -> [(FilePath, (FileMode, File))]
+addModes = zipWith (\m (n, f) -> (n, (m, f))) (writeable : repeat readable)
+
 flatGetFileStat :: State -> FilePath -> FuseOut FileStat
 flatGetFileStat _ "/" = getFuseContext >>= ok . dirStat
 flatGetFileStat (State st) ('/':fileName) = do
     fs <- readIORef st
     putStrLn fileName
-    case List.lookup fileName fs of
-        Just f -> getFuseContext >>= ok . fileStat f
+    case List.lookup fileName (addModes fs) of
+        Just (m, f) -> getFuseContext >>= ok . fileStat f m
         Nothing -> fail eNOENT
 flatGetFileStat _ _ = fail eNOENT
 
@@ -146,7 +153,7 @@ flatReadDirectory (State st) "/" = do
         [ (".", dirStat ctx)
         , ("..", dirStat ctx)
         ] <>
-        fmap (\(n, c) -> (n, fileStat c ctx)) fs
+        fmap (\(n, (m, c)) -> (n, fileStat c m ctx)) (addModes fs)
 flatReadDirectory _ _ = fail eNOENT
 
 flatOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> FuseOut Handle
