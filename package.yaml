@@ -64,6 +64,17 @@ executables:
     - bytestring
     - containers
     - unix
+  nullfs:
+    main:                Null.hs
+    source-dirs:         fuse
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - HFuse
+    - bytestring
+    - unix
   mkfs.flat:
     main:                Main.hs
     source-dirs:         mkfs
