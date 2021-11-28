@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Main (main) where
+module Null (main) where
 
 import GHC.Real (fromIntegral)
 
